@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>mFinance</title>
+  <meta name="theme-color" content="#f5f2ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Düzensiz gelir için kişisel finans defteri">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- iOS: ana ekrana eklenince tam ekran uygulama gibi açılsın -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="mFinance">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Giriş/kilit kararı verilene kadar içerik bir an bile görünmesin -->
+  <script>document.documentElement.classList.add('booting'); try { if (localStorage.getItem('mfinance:lock')) document.documentElement.classList.add('is-locked'); } catch (e) {}</script>
+</head>
+<body data-view="dashboard">
+
+<div class="app">
+  <!-- Yan menü (masaüstü) -->
+  <aside class="rail">
+    <div class="wordmark"><img src="assets/logo.svg" alt="" width="34" height="34"><span><i>m</i>Finance</span></div>
+    <nav class="rail-nav" aria-label="Bölümler">
+      <button data-tab="dashboard"><span class="idx">01</span>Özet</button>
+      <button data-tab="transactions"><span class="idx">02</span>Kayıtlar</button>
+      <button data-tab="recurring"><span class="idx">03</span>Düzenli ödemeler</button>
+      <button data-tab="debts"><span class="idx">04</span>Borçlar</button>
+      <button data-tab="settings"><span class="idx">05</span>Ayarlar</button>
+    </nav>
+    <div class="rates">
+      <div class="who-mini" id="whoMini"></div>
+      <button class="sync-pill off" data-sync-pill data-action="goto-account"><i></i><span>Senkron kapalı</span></button>
+      <div id="rateTicker"></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="bar">
+      <img class="bar-logo" src="assets/logo.svg" alt="mFinance" width="30" height="30">
+      <h1 id="viewTitle">Özet</h1>
+      <button class="sync-pill off" data-sync-pill data-action="goto-account" aria-label="Senkron durumu"><i></i><span>Senkron kapalı</span></button>
+      <div class="bar-tools">
+        <div class="month-switch">
+          <button id="prevMonth" aria-label="Önceki ay">←</button>
+          <button id="monthLabel"></button>
+          <button id="nextMonth" aria-label="Sonraki ay">→</button>
+        </div>
+        <button class="btn ink new-btn" data-action="add-tx" title="Yeni kayıt (N)">+ Yeni kayıt</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ÖZET -->
+      <section id="view-dashboard" class="view"></section>
+
+      <!-- KAYITLAR -->
+      <section id="view-transactions" class="view">
+        <div class="toolbar">
+          <div class="seg" id="fType">
+            <button data-ftype="all">Tümü</button>
+            <button data-ftype="income">Gelir</button>
+            <button data-ftype="expense">Gider</button>
+          </div>
+          <select id="fCat" aria-label="Kategori filtresi"></select>
+          <input type="search" id="fQ" placeholder="Not ya da kategori ara" aria-label="Ara">
+          <label class="check"><input type="checkbox" id="fAll"> Tüm aylar</label>
+        </div>
+        <div id="txSummary" class="summary-line"></div>
+        <div id="txList"></div>
+      </section>
+
+      <!-- DÜZENLİ ÖDEMELER -->
+      <section id="view-recurring" class="view">
+        <div class="intro">
+          <p>Her ay tekrar eden ödemeler: kira, faturalar, abonelikler. Döviz cinsinden olanları dolar ya da euro olarak gir; TL karşılığı güncel kurla hesaplanır, ödediğin gün kuruyla kaydedilir.</p>
+          <button class="btn ink" data-action="add-rec">+ Düzenli ödeme</button>
+        </div>
+        <div id="recSummary" class="figures"></div>
+        <div id="recList" class="ledger"></div>
+      </section>
+
+      <!-- BORÇLAR -->
+      <section id="view-debts" class="view">
+        <div class="intro">
+          <div>
+            <div class="seg" id="debtTabs" style="margin-bottom:12px">
+              <button data-debt-tab="debt">Borçlarım</button>
+              <button data-debt-tab="receivable">Alacaklarım</button>
+            </div>
+            <p id="debtIntro"></p>
+          </div>
+          <button class="btn ink" data-action="add-debt" id="debtAddBtn">+ Borç ekle</button>
+        </div>
+        <div id="debtSummary" class="figures"></div>
+        <div id="debtList"></div>
+      </section>
+
+      <!-- AYARLAR -->
+      <section id="view-settings" class="view">
+        <div class="settings-grid">
+          <div class="col">
+          <div class="block">
+            <header class="block-head"><h2>Genel</h2></header>
+            <label class="field"><span>Başlangıç bakiyesi</span>
+              <input id="sStart" inputmode="decimal" autocomplete="off" placeholder="0">
+              <small>Kullanmaya başladığında elindeki toplam para (nakit + banka).</small></label>
+            <label class="field"><span>Aylık bütçe — kendine maaş</span>
+              <input id="sBudget" inputmode="decimal" autocomplete="off" placeholder="Belirlenmedi">
+              <small>Bir ayda harcamaya izin verdiğin tutar. Boş bırakırsan kapalı.</small></label>
+            <label class="field"><span>Acil durum fonu hedefi (ay)</span>
+              <input id="sEmergency" type="number" min="1" max="24" step="1">
+              <small>Geliri düzensiz olanlar için 3–6 aylık gider önerilir.</small></label>
+            <div class="row2">
+              <label class="field"><span>Ana para birimi</span>
+                <select id="sCurrency">
+                  <option value="TRY">TRY — Türk lirası</option>
+                  <option value="USD">USD — ABD doları</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="GBP">GBP — Sterlin</option>
+                </select></label>
+              <label class="field"><span>Tema</span>
+                <select id="sTheme">
+                  <option value="auto">Sistem</option>
+                  <option value="light">Açık</option>
+                  <option value="dark">Koyu</option>
+                </select></label>
+            </div>
+          </div>
+
+          <div class="block" style="margin-top:28px">
+            <header class="block-head"><h2>Uygulama kilidi</h2></header>
+            <div id="lockBox"></div>
+            <div class="toggle-row" id="lockDelayRow" hidden>
+              <span>Otomatik kilit<small>Uygulamadan çıkınca ne zaman kilitlensin?</small></span>
+              <select id="sLockDelay" aria-label="Otomatik kilit">
+                <option value="0">Hemen</option>
+                <option value="60">1 dk sonra</option>
+                <option value="300">5 dk sonra</option>
+                <option value="900">15 dk sonra</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="block" style="margin-top:28px">
+            <header class="block-head"><h2>Bildirimler</h2></header>
+            <div id="notifyBox"></div>
+          </div>
+          </div>
+
+          <div class="block">
+            <header class="block-head"><h2>Kategoriler</h2></header>
+            <div class="cat-cols">
+              <div>
+                <h3 class="sub-head">Gider</h3>
+                <div id="catExpense" class="cat-list"></div>
+                <form class="cat-add" data-type="expense">
+                  <div class="icon-pick" data-default="package"></div>
+                  <input name="name" maxlength="30" placeholder="Yeni gider kategorisi" aria-label="Kategori adı">
+                  <button class="btn line" type="submit">Ekle</button>
+                </form>
+              </div>
+              <div>
+                <h3 class="sub-head">Gelir</h3>
+                <div id="catIncome" class="cat-list"></div>
+                <form class="cat-add" data-type="income">
+                  <div class="icon-pick" data-default="coin"></div>
+                  <input name="name" maxlength="30" placeholder="Yeni gelir kategorisi" aria-label="Kategori adı">
+                  <button class="btn line" type="submit">Ekle</button>
+                </form>
+              </div>
+            </div>
+            <header class="block-head" style="margin-top:28px"><h2>Hızlı ekleme şablonları</h2></header>
+            <div id="tplList" class="cat-list"></div>
+          </div>
+
+          <div class="block">
+            <header class="block-head"><h2>Hesap ve senkron</h2></header>
+            <div id="accountBox" class="account-box"></div>
+            <header class="block-head" style="margin-top:28px"><h2>Döviz kurları</h2></header>
+            <div id="rateInfo" class="rate-info"></div>
+            <header class="block-head" style="margin-top:28px"><h2>Veriler</h2></header>
+            <p class="muted small">Verilerin yalnızca bu tarayıcıda saklanır, hiçbir sunucuya gönderilmez. Tarayıcı verilerini temizlersen kaybolur; düzenli yedek al.</p>
+            <p class="small" id="backupInfo"></p>
+            <div class="btn-col">
+              <button class="btn line" data-action="export-json">Yedek indir (.json)</button>
+              <button class="btn line" data-action="import-json">Yedekten geri yükle</button>
+              <button class="btn line" data-action="export-csv">Excel için dışa aktar (.csv)</button>
+              <button class="btn line danger" data-action="wipe">Tüm verileri sil</button>
+            </div>
+            <input type="file" id="importFile" accept="application/json,.json" hidden>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<button class="fab" data-action="add-tx" aria-label="Yeni kayıt ekle">+</button>
+
+<nav class="bottom-nav" aria-label="Bölümler">
+  <button data-tab="dashboard">Özet</button>
+  <button data-tab="transactions">Kayıtlar</button>
+  <button data-tab="recurring">Düzenli</button>
+  <button data-tab="debts">Borçlar</button>
+  <button data-tab="settings">Ayarlar</button>
+</nav>
+
+<!-- Kayıt penceresi -->
+<dialog id="txDialog" class="sheet">
+  <form id="txForm" novalidate>
+    <header class="sheet-head">
+      <h2 id="txTitle">Yeni kayıt</h2>
+      <button type="button" class="close" data-close aria-label="Kapat">Kapat</button>
+    </header>
+    <div class="seg seg-type">
+      <button type="button" data-type="expense">Gider</button>
+      <button type="button" data-type="income">Gelir</button>
+    </div>
+    <div class="field"><span>Tutar</span>
+      <div class="amount-wrap">
+        <input id="txAmount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Tutar">
+        <select id="txCurrency" class="cur-select" aria-label="Para birimi"></select>
+      </div>
+      <p class="conv" id="txConv"></p>
+    </div>
+    <div class="field"><span>Kategori</span><div class="chips" id="txCats"></div></div>
+    <div class="row2">
+      <label class="field"><span>Tarih</span><input type="date" id="txDate"></label>
+      <label class="field"><span>Not</span><input id="txNote" maxlength="120" placeholder="İsteğe bağlı"></label>
+    </div>
+    <label class="check tpl-check" id="txTplWrap"><input type="checkbox" id="txSaveTpl"> Hızlı ekleme şablonu olarak da kaydet <small class="muted">(Özet'te tek dokunuşla eklenir)</small></label>
+    <p class="form-error" id="txError" role="alert"></p>
+    <footer class="sheet-foot">
+      <button type="button" class="btn line danger" id="txDelete">Sil</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn line" data-close>Vazgeç</button>
+      <button type="submit" class="btn ink">Kaydet</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Düzenli ödeme penceresi -->
+<dialog id="recDialog" class="sheet">
+  <form id="recForm" novalidate>
+    <header class="sheet-head">
+      <h2 id="recTitle">Yeni düzenli ödeme</h2>
+      <button type="button" class="close" data-close aria-label="Kapat">Kapat</button>
+    </header>
+    <label class="field"><span>Ad</span><input id="recName" maxlength="40" placeholder="Kira, internet, sunucu, müzik aboneliği…"></label>
+    <div class="field"><span>Aylık tutar</span>
+      <div class="amount-wrap">
+        <input id="recAmount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Aylık tutar">
+        <select id="recCurrency" class="cur-select" aria-label="Para birimi"></select>
+      </div>
+      <p class="conv" id="recConv"></p>
+    </div>
+    <label class="field"><span>Ayın kaçında ödeniyor?</span><input id="recDay" type="number" min="1" max="31" step="1" value="1"></label>
+    <div class="field"><span>Kategori</span><div class="chips" id="recCats"></div></div>
+    <p class="form-error" id="recError" role="alert"></p>
+    <footer class="sheet-foot">
+      <button type="button" class="btn line danger" id="recDelete">Sil</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn line" data-close>Vazgeç</button>
+      <button type="submit" class="btn ink">Kaydet</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Borç penceresi -->
+<dialog id="debtDialog" class="sheet">
+  <form id="debtForm" novalidate>
+    <header class="sheet-head">
+      <h2 id="debtTitle">Yeni borç</h2>
+      <button type="button" class="close" data-close aria-label="Kapat">Kapat</button>
+    </header>
+    <div class="seg seg-type debt-kind" id="debtKind">
+      <button type="button" data-kind="debt">Borcum var</button>
+      <button type="button" data-kind="receivable">Alacağım var</button>
+    </div>
+    <div class="field"><span id="debtNameLabel">Ad</span>
+      <div class="name-row">
+        <div class="icon-pick" id="debtIcon" data-default="card"></div>
+        <input id="debtName" maxlength="40" placeholder="Kredi kartı, telefon taksiti, arkadaşa borç…" aria-label="Borç adı">
+      </div>
+    </div>
+    <div class="field"><span>Toplam borç</span>
+      <div class="amount-wrap">
+        <input id="debtTotal" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Toplam borç">
+        <select id="debtCurrency" class="cur-select" aria-label="Para birimi"></select>
+      </div>
+      <p class="conv" id="debtConv"></p>
+    </div>
+    <label class="check check-row" id="debtLendWrap"><input type="checkbox" id="debtLend" checked> Parayı şimdi verdim, bakiyemden düş</label>
+    <label class="check check-row" id="debtPlanWrap"><input type="checkbox" id="debtPlanOn"> Taksitli ödüyorum</label>
+    <div class="plan-box" id="debtPlanBox" hidden>
+      <div class="row2">
+        <label class="field"><span>Taksit sayısı</span><input id="planCount" type="number" min="1" max="120" step="1" inputmode="numeric" placeholder="12"></label>
+        <label class="field"><span>Aylık taksit</span><input id="planAmount" inputmode="decimal" autocomplete="off" placeholder="Otomatik"></label>
+      </div>
+      <div class="row2">
+        <label class="field"><span>Ödeme günü</span><input id="planDay" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="15"></label>
+        <label class="field"><span>İlk taksit ayı</span><input id="planStart" type="month"></label>
+      </div>
+      <p class="plan-hint" id="planHint"></p>
+    </div>
+    <div class="row2">
+      <label class="field" id="debtDueWrap"><span id="debtDueLabel">Son ödeme tarihi <small class="muted">(isteğe bağlı)</small></span><input type="date" id="debtDue"></label>
+      <label class="field"><span>Not</span><input id="debtNote" maxlength="120" placeholder="Kime, ne için…"></label>
+    </div>
+    <div id="debtHistory"></div>
+    <p class="form-error" id="debtError" role="alert"></p>
+    <footer class="sheet-foot">
+      <button type="button" class="btn line danger" id="debtDelete">Sil</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn line" data-close>Vazgeç</button>
+      <button type="submit" class="btn ink">Kaydet</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Borç ödeme penceresi -->
+<dialog id="payDialog" class="sheet">
+  <form id="payForm" novalidate>
+    <header class="sheet-head">
+      <h2 id="payTitle">Ödeme yap</h2>
+      <button type="button" class="close" data-close aria-label="Kapat">Kapat</button>
+    </header>
+    <div class="pay-left" id="payLeft"></div>
+    <div class="field"><span id="payAmountLabel">Ödediğin tutar</span>
+      <div class="amount-wrap">
+        <input id="payAmount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Ödenen tutar">
+        <span class="cur-static" id="payCur">₺</span>
+      </div>
+      <p class="conv" id="payConv"></p>
+      <div class="chips quick" id="payQuick"></div>
+    </div>
+    <div class="row2">
+      <label class="field"><span>Tarih</span><input type="date" id="payDate"></label>
+      <label class="field"><span>Not</span><input id="payNote" maxlength="120" placeholder="İsteğe bağlı"></label>
+    </div>
+    <p class="muted small" id="payInfo">Bu ödeme “Borç ödemesi” gideri olarak da kaydedilir ve bakiyenden düşer.</p>
+    <p class="form-error" id="payError" role="alert"></p>
+    <footer class="sheet-foot">
+      <span class="spacer"></span>
+      <button type="button" class="btn line" data-close>Vazgeç</button>
+      <button type="submit" class="btn ink" id="paySubmit">Ödemeyi kaydet</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Giriş / kayıt ekranı -->
+<div id="auth" class="auth" hidden>
+  <div class="auth-inner">
+    <img class="auth-logo" src="assets/logo.svg" alt="" width="64" height="64">
+    <h1 class="auth-title"><i>m</i>Finance</h1>
+    <p class="auth-sub">Gelirin düzensiz, planın düzenli olsun.</p>
+    <div class="seg auth-tabs" role="tablist">
+      <button type="button" data-auth-mode="in" role="tab">Giriş yap</button>
+      <button type="button" data-auth-mode="up" role="tab">Kayıt ol</button>
+    </div>
+    <form id="authGateForm" novalidate>
+      <label class="field"><span>Kullanıcı adı</span>
+        <input id="agUser" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24" placeholder="ör. ufuk">
+        <small id="agUserHint" hidden>3–24 karakter: küçük harf, rakam, nokta, alt çizgi ya da tire.</small></label>
+      <label class="field"><span>Şifre</span>
+        <input id="agPass" type="password" autocomplete="current-password" maxlength="72"></label>
+      <label class="field" id="agPass2Wrap" hidden><span>Şifre tekrar</span>
+        <input id="agPass2" type="password" autocomplete="new-password" maxlength="72"></label>
+      <p class="form-error" id="agError" role="alert"></p>
+      <button class="btn ink auth-submit" type="submit" id="agSubmit">Giriş yap</button>
+    </form>
+    <p class="auth-foot" id="agFoot"></p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="js/merge.js"></script>
+<script src="js/lock.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

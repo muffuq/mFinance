@@ -1,0 +1,11 @@
+{
+  "name": "mfinance",
+  "private": true,
+  "description": "Düzensiz gelir için kişisel finans defteri — sunucu tarafı yalnızca bildirimler ve günlük bakım görevi için",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

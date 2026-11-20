@@ -1,0 +1,9 @@
+# Yalnızca geliştirme/kurulum için; internete yüklenmez
+.claude
+supabase
+KURULUM.md
+.env*
+.vercel
+.gitignore
+node_modules
+package-lock.json
